@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOTHER2 HP Drum</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #030712;
+    }
+    .drum-container {
+      overflow: hidden;
+      position: relative;
+    }
+    .drum-strip {
+      position: absolute;
+      width: 100%;
+    }
+    .drum-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent 30%, transparent 70%, rgba(0,0,0,0.5));
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // 単一の桁ドラム
+    function DrumDigit({ digit, isAnimating, duration = 500 }) {
+      const [offset, setOffset] = useState(digit * -40);
+      const prevDigit = useRef(digit);
+
+      useEffect(() => {
+        if (!isAnimating) {
+          setOffset(digit * -40);
+          prevDigit.current = digit;
+          return;
+        }
+
+        const startOffset = prevDigit.current * -40;
+        const targetOffset = digit * -40;
+        const startTime = performance.now();
+        const rotations = 2;
+        const totalDistance = (rotations * 10 * 40) + (targetOffset - startOffset);
+
+        function animate(currentTime) {
+          const elapsed = currentTime - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+          const eased = 1 - Math.pow(1 - progress, 3);
+          
+          let currentOffset = startOffset - (totalDistance * eased);
+          currentOffset = ((currentOffset % -400) + -400) % -400 || currentOffset;
+          setOffset(currentOffset);
+
+          if (progress < 1) {
+            requestAnimationFrame(animate);
+          } else {
+            setOffset(targetOffset);
+            prevDigit.current = digit;
+          }
+        }
+
+        requestAnimationFrame(animate);
+      }, [digit, isAnimating, duration]);
+
+      return (
+        <div className="drum-container w-12 h-10 bg-gray-900 border-2 border-gray-600 rounded">
+          <div 
+            className="drum-strip"
+            style={{ transform: `translateY(${offset}px)` }}
+          >
+            {[0,1,2,3,4,5,6,7,8,9].map(n => (
+              <div 
+                key={n}
+                className="h-10 flex items-center justify-center text-2xl font-bold text-green-400 font-mono"
+              >
+                {n}
+              </div>
+            ))}
+          </div>
+          <div className="drum-overlay"></div>
+        </div>
+      );
+    }
+
+    // ドラムカウンター全体
+    function DrumCounter({ value, digits = 4, animationDuration = 1500 }) {
+      const [displayValue, setDisplayValue] = useState(value);
+      const [isAnimating, setIsAnimating] = useState(false);
+      const targetRef = useRef(value);
+      const intervalRef = useRef(null);
+
+      useEffect(() => {
+        if (value === displayValue) return;
+
+        targetRef.current = value;
+        setIsAnimating(true);
+
+        if (intervalRef.current) clearInterval(intervalRef.current);
+
+        const diff = value - displayValue;
+        const steps = Math.min(Math.abs(diff), 20);
+        const stepValue = diff / steps;
+        const stepDuration = animationDuration / steps;
+        let currentStep = 0;
+
+        intervalRef.current = setInterval(() => {
+          currentStep++;
+          if (currentStep >= steps) {
+            setDisplayValue(targetRef.current);
+            setIsAnimating(false);
+            clearInterval(intervalRef.current);
+          } else {
+            setDisplayValue(prev => {
+              const next = prev + stepValue;
+              return diff > 0 
+                ? Math.min(Math.round(next), targetRef.current)
+                : Math.max(Math.round(next), targetRef.current);
+            });
+          }
+        }, stepDuration);
+
+        return () => {
+          if (intervalRef.current) clearInterval(intervalRef.current);
+        };
+      }, [value, animationDuration]);
+
+      const paddedValue = String(Math.max(0, displayValue)).padStart(digits, '0');
+      const digitArray = paddedValue.split('').map(Number);
+
+      return (
+        <div className="flex gap-1 p-3 bg-gray-800 rounded-lg shadow-inner">
+          {digitArray.map((d, i) => (
+            <DrumDigit 
+              key={i} 
+              digit={d} 
+              isAnimating={isAnimating}
+              duration={animationDuration / 2}
+            />
+          ))}
+        </div>
+      );
+    }
+
+    // メインアプリ
+    function App() {
+      const [hp, setHp] = useState(999);
+      const maxHp = 999;
+
+      const takeDamage = (amount) => setHp(prev => Math.max(0, prev - amount));
+      const heal = (amount) => setHp(prev => Math.min(maxHp, prev + amount));
+
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center gap-8 p-8">
+          <h1 className="text-3xl font-bold text-yellow-400 tracking-wider">
+            MOTHER2 HP DRUM
+          </h1>
+
+          <div className="flex flex-col items-center gap-4">
+            <div className="text-gray-400 text-sm tracking-widest">HP</div>
+            <DrumCounter value={hp} digits={4} animationDuration={1500} />
+            <div className="text-gray-500 text-xs">/ {maxHp}</div>
+          </div>
+
+          <div className="flex flex-wrap gap-3 justify-center">
+            <button
+              onClick={() => takeDamage(50)}
+              className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded font-bold transition-colors"
+            >
+              -50 ダメージ
+            </button>
+            <button
+              onClick={() => takeDamage(150)}
+              className="px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded font-bold transition-colors"
+            >
+              -150 大ダメージ
+            </button>
+            <button
+              onClick={() => takeDamage(500)}
+              className="px-4 py-2 bg-red-900 hover:bg-red-800 text-white rounded font-bold transition-colors"
+            >
+              -500 致命傷！
+            </button>
+            <button
+              onClick={() => heal(100)}
+              className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded font-bold transition-colors"
+            >
+              +100 回復
+            </button>
+            <button
+              onClick={() => setHp(maxHp)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold transition-colors"
+            >
+              全回復
+            </button>
+          </div>
+
+          <p className="text-gray-500 text-sm max-w-md text-center">
+            致命傷を受けても、HPが0になる前に回復ボタンを押せば助かる...かも？
+          </p>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
