@@ -72,10 +72,10 @@
     const { useState, useEffect, useRef } = React;
 
     const FACE_COUNT = 10;
-    const ANGLE_PER_FACE = 360 / FACE_COUNT; // 36度
-    const RADIUS = 32; // 円筒の半径を小さく
+    const ANGLE_PER_FACE = 360 / FACE_COUNT;
+    const RADIUS = 32;
 
-    function DrumDigit({ digit, duration = 500 }) {
+    function DrumDigit({ digit, duration = 150 }) {
       const cylinderRef = useRef(null);
       const animationRef = useRef(null);
       const currentAngleRef = useRef(digit * -ANGLE_PER_FACE);
@@ -86,26 +86,30 @@
         }
 
         const startAngle = currentAngleRef.current;
-        const targetAngle = digit * -ANGLE_PER_FACE;
+        // 現在の正規化された角度から目標を計算
+        const normalizedStart = ((startAngle % 360) + 360) % 360;
+        const targetBase = digit * -ANGLE_PER_FACE;
+        const normalizedTarget = ((targetBase % 360) + 360) % 360;
         
-        if (startAngle === targetAngle) return;
+        // 最短距離を計算
+        let diff = normalizedTarget - normalizedStart;
+        if (diff > 180) diff -= 360;
+        if (diff < -180) diff += 360;
+        
+        const targetAngle = startAngle + diff;
+        
+        if (Math.abs(diff) < 0.1) return;
 
         const startTime = performance.now();
-        
-        let distance = targetAngle - startAngle;
-        
-        if (distance > 0) {
-          distance = distance - 360;
-        }
-        distance -= 360;
 
         function animate(currentTime) {
           const elapsed = currentTime - startTime;
           const progress = Math.min(elapsed / duration, 1);
           
-          const eased = 1 - Math.pow(1 - progress, 3);
+          // イーズアウト
+          const eased = 1 - Math.pow(1 - progress, 2);
           
-          let newAngle = startAngle + distance * eased;
+          const newAngle = startAngle + diff * eased;
           currentAngleRef.current = newAngle;
           
           if (cylinderRef.current) {
@@ -162,42 +166,62 @@
       );
     }
 
-    function DrumCounter({ value, digits = 4, animationDuration = 1200 }) {
+    function DrumCounter({ value, digits = 4, tickInterval = 50 }) {
       const [displayValue, setDisplayValue] = useState(value);
       const targetRef = useRef(value);
       const intervalRef = useRef(null);
 
       useEffect(() => {
-        if (value === displayValue) return;
-
         targetRef.current = value;
+        
+        if (intervalRef.current) {
+          return; // すでにアニメーション中なら継続
+        }
 
-        if (intervalRef.current) clearInterval(intervalRef.current);
+        const tick = () => {
+          setDisplayValue(prev => {
+            const target = targetRef.current;
+            if (prev === target) {
+              clearInterval(intervalRef.current);
+              intervalRef.current = null;
+              return prev;
+            }
+            // 1ずつ増減
+            return prev < target ? prev + 1 : prev - 1;
+          });
+        };
 
-        const startValue = displayValue;
-        const diff = value - startValue;
-        const totalSteps = Math.min(Math.abs(diff), 30);
-        const stepDuration = animationDuration / totalSteps;
-        let currentStep = 0;
-
-        intervalRef.current = setInterval(() => {
-          currentStep++;
-          
-          if (currentStep >= totalSteps) {
-            setDisplayValue(targetRef.current);
-            clearInterval(intervalRef.current);
-          } else {
-            const progress = currentStep / totalSteps;
-            const easedProgress = 1 - Math.pow(1 - progress, 2);
-            const newValue = Math.round(startValue + diff * easedProgress);
-            setDisplayValue(newValue);
-          }
-        }, stepDuration);
+        if (displayValue !== value) {
+          intervalRef.current = setInterval(tick, tickInterval);
+        }
 
         return () => {
-          if (intervalRef.current) clearInterval(intervalRef.current);
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+          }
         };
-      }, [value, animationDuration]);
+      }, [value, tickInterval]);
+
+      // 途中で目標値が変わった場合に対応
+      useEffect(() => {
+        targetRef.current = value;
+        
+        if (!intervalRef.current && displayValue !== value) {
+          const tick = () => {
+            setDisplayValue(prev => {
+              const target = targetRef.current;
+              if (prev === target) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+                return prev;
+              }
+              return prev < target ? prev + 1 : prev - 1;
+            });
+          };
+          intervalRef.current = setInterval(tick, tickInterval);
+        }
+      }, [value]);
 
       const paddedValue = String(Math.max(0, displayValue)).padStart(digits, '0');
       const digitArray = paddedValue.split('').map(Number);
@@ -208,7 +232,7 @@
             <DrumDigit 
               key={i} 
               digit={d} 
-              duration={500}
+              duration={120}
             />
           ))}
         </div>
@@ -230,7 +254,7 @@
 
           <div className="flex flex-col items-center gap-4">
             <div className="text-gray-400 text-sm tracking-widest">HP</div>
-            <DrumCounter value={hp} digits={4} animationDuration={1200} />
+            <DrumCounter value={hp} digits={4} tickInterval={40} />
             <div className="text-gray-500 text-xs">/ {maxHp}</div>
           </div>
 
