@@ -35,50 +35,90 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
+    const DIGIT_HEIGHT = 40;
+    const TOTAL_DIGITS = 10;
+    const STRIP_HEIGHT = DIGIT_HEIGHT * TOTAL_DIGITS;
+
     // 単一の桁ドラム
-    function DrumDigit({ digit, isAnimating, duration = 500 }) {
-      const [offset, setOffset] = useState(digit * -40);
-      const prevDigit = useRef(digit);
+    function DrumDigit({ digit, duration = 600 }) {
+      const stripRef = useRef(null);
+      const animationRef = useRef(null);
+      const currentOffsetRef = useRef(digit * -DIGIT_HEIGHT);
 
       useEffect(() => {
-        if (!isAnimating) {
-          setOffset(digit * -40);
-          prevDigit.current = digit;
-          return;
+        // 前のアニメーションをキャンセル
+        if (animationRef.current) {
+          cancelAnimationFrame(animationRef.current);
         }
 
-        const startOffset = prevDigit.current * -40;
-        const targetOffset = digit * -40;
+        const startOffset = currentOffsetRef.current;
+        const targetOffset = digit * -DIGIT_HEIGHT;
+        
+        // 同じ位置なら何もしない
+        if (startOffset === targetOffset) return;
+
         const startTime = performance.now();
-        const rotations = 2;
-        const totalDistance = (rotations * 10 * 40) + (targetOffset - startOffset);
+        
+        // 回転方向は常に下向き（数字が上にスクロール）
+        // 少なくとも1回転 + 目標位置まで
+        let distance = targetOffset - startOffset;
+        
+        // 常に下方向に回転させる（マイナス方向）
+        if (distance > 0) {
+          distance = distance - STRIP_HEIGHT;
+        }
+        // 最低1回転追加
+        distance -= STRIP_HEIGHT;
 
         function animate(currentTime) {
           const elapsed = currentTime - startTime;
           const progress = Math.min(elapsed / duration, 1);
+          
+          // イーズアウト（最後に減速）
           const eased = 1 - Math.pow(1 - progress, 3);
           
-          let currentOffset = startOffset - (totalDistance * eased);
-          currentOffset = ((currentOffset % -400) + -400) % -400 || currentOffset;
-          setOffset(currentOffset);
+          let newOffset = startOffset + distance * eased;
+          
+          // オフセットを正規化（-400 ~ 0 の範囲に）
+          newOffset = ((newOffset % STRIP_HEIGHT) + STRIP_HEIGHT) % STRIP_HEIGHT;
+          if (newOffset > 0) newOffset -= STRIP_HEIGHT;
+          
+          currentOffsetRef.current = newOffset;
+          
+          if (stripRef.current) {
+            stripRef.current.style.transform = `translateY(${newOffset}px)`;
+          }
 
           if (progress < 1) {
-            requestAnimationFrame(animate);
+            animationRef.current = requestAnimationFrame(animate);
           } else {
-            setOffset(targetOffset);
-            prevDigit.current = digit;
+            // 最終位置を確実にセット
+            currentOffsetRef.current = targetOffset;
+            if (stripRef.current) {
+              stripRef.current.style.transform = `translateY(${targetOffset}px)`;
+            }
           }
         }
 
-        requestAnimationFrame(animate);
-      }, [digit, isAnimating, duration]);
+        animationRef.current = requestAnimationFrame(animate);
+
+        return () => {
+          if (animationRef.current) {
+            cancelAnimationFrame(animationRef.current);
+          }
+        };
+      }, [digit, duration]);
+
+      // 初期位置設定
+      useEffect(() => {
+        if (stripRef.current) {
+          stripRef.current.style.transform = `translateY(${digit * -DIGIT_HEIGHT}px)`;
+        }
+      }, []);
 
       return (
         <div className="drum-container w-12 h-10 bg-gray-900 border-2 border-gray-600 rounded">
-          <div 
-            className="drum-strip"
-            style={{ transform: `translateY(${offset}px)` }}
-          >
+          <div ref={stripRef} className="drum-strip">
             {[0,1,2,3,4,5,6,7,8,9].map(n => (
               <div 
                 key={n}
@@ -94,9 +134,8 @@
     }
 
     // ドラムカウンター全体
-    function DrumCounter({ value, digits = 4, animationDuration = 1500 }) {
+    function DrumCounter({ value, digits = 4, animationDuration = 1200 }) {
       const [displayValue, setDisplayValue] = useState(value);
-      const [isAnimating, setIsAnimating] = useState(false);
       const targetRef = useRef(value);
       const intervalRef = useRef(null);
 
@@ -104,29 +143,26 @@
         if (value === displayValue) return;
 
         targetRef.current = value;
-        setIsAnimating(true);
 
         if (intervalRef.current) clearInterval(intervalRef.current);
 
-        const diff = value - displayValue;
-        const steps = Math.min(Math.abs(diff), 20);
-        const stepValue = diff / steps;
-        const stepDuration = animationDuration / steps;
+        const startValue = displayValue;
+        const diff = value - startValue;
+        const totalSteps = Math.min(Math.abs(diff), 30);
+        const stepDuration = animationDuration / totalSteps;
         let currentStep = 0;
 
         intervalRef.current = setInterval(() => {
           currentStep++;
-          if (currentStep >= steps) {
+          
+          if (currentStep >= totalSteps) {
             setDisplayValue(targetRef.current);
-            setIsAnimating(false);
             clearInterval(intervalRef.current);
           } else {
-            setDisplayValue(prev => {
-              const next = prev + stepValue;
-              return diff > 0 
-                ? Math.min(Math.round(next), targetRef.current)
-                : Math.max(Math.round(next), targetRef.current);
-            });
+            const progress = currentStep / totalSteps;
+            const easedProgress = 1 - Math.pow(1 - progress, 2);
+            const newValue = Math.round(startValue + diff * easedProgress);
+            setDisplayValue(newValue);
           }
         }, stepDuration);
 
@@ -144,8 +180,7 @@
             <DrumDigit 
               key={i} 
               digit={d} 
-              isAnimating={isAnimating}
-              duration={animationDuration / 2}
+              duration={400}
             />
           ))}
         </div>
@@ -168,7 +203,7 @@
 
           <div className="flex flex-col items-center gap-4">
             <div className="text-gray-400 text-sm tracking-widest">HP</div>
-            <DrumCounter value={hp} digits={4} animationDuration={1500} />
+            <DrumCounter value={hp} digits={4} animationDuration={1200} />
             <div className="text-gray-500 text-xs">/ {maxHp}</div>
           </div>
 
