@@ -10,39 +10,40 @@
       background-color: #030712;
     }
     .drum-container {
-      perspective: 200px;
+      perspective: 150px;
       overflow: hidden;
       position: relative;
     }
     .drum-cylinder {
-      position: relative;
+      position: absolute;
       width: 100%;
-      height: 100%;
+      top: 50%;
       transform-style: preserve-3d;
     }
     .drum-face {
       position: absolute;
       width: 100%;
-      height: 40px;
+      height: 32px;
+      margin-top: -16px;
       display: flex;
       align-items: center;
       justify-content: center;
       backface-visibility: hidden;
       font-family: monospace;
       font-weight: bold;
-      font-size: 1.5rem;
+      font-size: 1.4rem;
       color: #4ade80;
     }
     .drum-overlay {
       position: absolute;
       inset: 0;
       background: linear-gradient(to bottom, 
-        rgba(0,0,0,0.7) 0%, 
-        rgba(0,0,0,0.2) 20%,
-        transparent 40%,
-        transparent 60%,
-        rgba(0,0,0,0.2) 80%,
-        rgba(0,0,0,0.7) 100%
+        rgba(0,0,0,0.85) 0%, 
+        rgba(0,0,0,0.4) 25%,
+        transparent 45%,
+        transparent 55%,
+        rgba(0,0,0,0.4) 75%,
+        rgba(0,0,0,0.85) 100%
       );
       pointer-events: none;
       border-radius: 4px;
@@ -51,9 +52,9 @@
       position: absolute;
       inset: 0;
       background: linear-gradient(to right,
-        rgba(255,255,255,0.05) 0%,
-        rgba(255,255,255,0.1) 50%,
-        rgba(255,255,255,0.05) 100%
+        rgba(255,255,255,0.03) 0%,
+        rgba(255,255,255,0.08) 50%,
+        rgba(255,255,255,0.03) 100%
       );
       pointer-events: none;
       border-radius: 4px;
@@ -70,12 +71,10 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    // 円筒の半径（数字がきれいに並ぶように計算）
     const FACE_COUNT = 10;
     const ANGLE_PER_FACE = 360 / FACE_COUNT; // 36度
-    const RADIUS = 60; // 円筒の半径
+    const RADIUS = 32; // 円筒の半径を小さく
 
-    // 単一の桁ドラム（3D円筒版）
     function DrumDigit({ digit, duration = 500 }) {
       const cylinderRef = useRef(null);
       const animationRef = useRef(null);
@@ -93,21 +92,17 @@
 
         const startTime = performance.now();
         
-        // 回転距離を計算（常に正方向に回転 = 数字が下から上へ）
         let distance = targetAngle - startAngle;
         
-        // 最短経路ではなく、必ず回転して見えるように
         if (distance > 0) {
           distance = distance - 360;
         }
-        // 最低1回転追加でドラム感を出す
         distance -= 360;
 
         function animate(currentTime) {
           const elapsed = currentTime - startTime;
           const progress = Math.min(elapsed / duration, 1);
           
-          // イーズアウト
           const eased = 1 - Math.pow(1 - progress, 3);
           
           let newAngle = startAngle + distance * eased;
@@ -136,7 +131,6 @@
         };
       }, [digit, duration]);
 
-      // 各数字面の配置を計算
       const faces = Array.from({ length: FACE_COUNT }, (_, i) => {
         const angle = i * ANGLE_PER_FACE;
         return {
@@ -148,7 +142,7 @@
       });
 
       return (
-        <div className="drum-container w-14 h-12 bg-gray-900 border-2 border-gray-600 rounded">
+        <div className="drum-container w-12 h-16 bg-gray-900 border-2 border-gray-600 rounded">
           <div 
             ref={cylinderRef}
             className="drum-cylinder"
@@ -168,7 +162,6 @@
       );
     }
 
-    // ドラムカウンター全体
     function DrumCounter({ value, digits = 4, animationDuration = 1200 }) {
       const [displayValue, setDisplayValue] = useState(value);
       const targetRef = useRef(value);
@@ -222,7 +215,6 @@
       );
     }
 
-    // メインアプリ
     function App() {
       const [hp, setHp] = useState(999);
       const maxHp = 999;
