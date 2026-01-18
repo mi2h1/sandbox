@@ -10,18 +10,53 @@
       background-color: #030712;
     }
     .drum-container {
+      perspective: 200px;
       overflow: hidden;
       position: relative;
     }
-    .drum-strip {
+    .drum-cylinder {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transform-style: preserve-3d;
+    }
+    .drum-face {
       position: absolute;
       width: 100%;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backface-visibility: hidden;
+      font-family: monospace;
+      font-weight: bold;
+      font-size: 1.5rem;
+      color: #4ade80;
     }
     .drum-overlay {
       position: absolute;
       inset: 0;
-      background: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent 30%, transparent 70%, rgba(0,0,0,0.5));
+      background: linear-gradient(to bottom, 
+        rgba(0,0,0,0.7) 0%, 
+        rgba(0,0,0,0.2) 20%,
+        transparent 40%,
+        transparent 60%,
+        rgba(0,0,0,0.2) 80%,
+        rgba(0,0,0,0.7) 100%
+      );
       pointer-events: none;
+      border-radius: 4px;
+    }
+    .drum-highlight {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to right,
+        rgba(255,255,255,0.05) 0%,
+        rgba(255,255,255,0.1) 50%,
+        rgba(255,255,255,0.05) 100%
+      );
+      pointer-events: none;
+      border-radius: 4px;
     }
   </style>
 </head>
@@ -35,67 +70,59 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    const DIGIT_HEIGHT = 40;
-    const TOTAL_DIGITS = 10;
-    const STRIP_HEIGHT = DIGIT_HEIGHT * TOTAL_DIGITS;
+    // 円筒の半径（数字がきれいに並ぶように計算）
+    const FACE_COUNT = 10;
+    const ANGLE_PER_FACE = 360 / FACE_COUNT; // 36度
+    const RADIUS = 60; // 円筒の半径
 
-    // 単一の桁ドラム
-    function DrumDigit({ digit, duration = 600 }) {
-      const stripRef = useRef(null);
+    // 単一の桁ドラム（3D円筒版）
+    function DrumDigit({ digit, duration = 500 }) {
+      const cylinderRef = useRef(null);
       const animationRef = useRef(null);
-      const currentOffsetRef = useRef(digit * -DIGIT_HEIGHT);
+      const currentAngleRef = useRef(digit * -ANGLE_PER_FACE);
 
       useEffect(() => {
-        // 前のアニメーションをキャンセル
         if (animationRef.current) {
           cancelAnimationFrame(animationRef.current);
         }
 
-        const startOffset = currentOffsetRef.current;
-        const targetOffset = digit * -DIGIT_HEIGHT;
+        const startAngle = currentAngleRef.current;
+        const targetAngle = digit * -ANGLE_PER_FACE;
         
-        // 同じ位置なら何もしない
-        if (startOffset === targetOffset) return;
+        if (startAngle === targetAngle) return;
 
         const startTime = performance.now();
         
-        // 回転方向は常に下向き（数字が上にスクロール）
-        // 少なくとも1回転 + 目標位置まで
-        let distance = targetOffset - startOffset;
+        // 回転距離を計算（常に正方向に回転 = 数字が下から上へ）
+        let distance = targetAngle - startAngle;
         
-        // 常に下方向に回転させる（マイナス方向）
+        // 最短経路ではなく、必ず回転して見えるように
         if (distance > 0) {
-          distance = distance - STRIP_HEIGHT;
+          distance = distance - 360;
         }
-        // 最低1回転追加
-        distance -= STRIP_HEIGHT;
+        // 最低1回転追加でドラム感を出す
+        distance -= 360;
 
         function animate(currentTime) {
           const elapsed = currentTime - startTime;
           const progress = Math.min(elapsed / duration, 1);
           
-          // イーズアウト（最後に減速）
+          // イーズアウト
           const eased = 1 - Math.pow(1 - progress, 3);
           
-          let newOffset = startOffset + distance * eased;
+          let newAngle = startAngle + distance * eased;
+          currentAngleRef.current = newAngle;
           
-          // オフセットを正規化（-400 ~ 0 の範囲に）
-          newOffset = ((newOffset % STRIP_HEIGHT) + STRIP_HEIGHT) % STRIP_HEIGHT;
-          if (newOffset > 0) newOffset -= STRIP_HEIGHT;
-          
-          currentOffsetRef.current = newOffset;
-          
-          if (stripRef.current) {
-            stripRef.current.style.transform = `translateY(${newOffset}px)`;
+          if (cylinderRef.current) {
+            cylinderRef.current.style.transform = `rotateX(${newAngle}deg)`;
           }
 
           if (progress < 1) {
             animationRef.current = requestAnimationFrame(animate);
           } else {
-            // 最終位置を確実にセット
-            currentOffsetRef.current = targetOffset;
-            if (stripRef.current) {
-              stripRef.current.style.transform = `translateY(${targetOffset}px)`;
+            currentAngleRef.current = targetAngle;
+            if (cylinderRef.current) {
+              cylinderRef.current.style.transform = `rotateX(${targetAngle}deg)`;
             }
           }
         }
@@ -109,26 +136,34 @@
         };
       }, [digit, duration]);
 
-      // 初期位置設定
-      useEffect(() => {
-        if (stripRef.current) {
-          stripRef.current.style.transform = `translateY(${digit * -DIGIT_HEIGHT}px)`;
-        }
-      }, []);
+      // 各数字面の配置を計算
+      const faces = Array.from({ length: FACE_COUNT }, (_, i) => {
+        const angle = i * ANGLE_PER_FACE;
+        return {
+          digit: i,
+          style: {
+            transform: `rotateX(${angle}deg) translateZ(${RADIUS}px)`,
+          }
+        };
+      });
 
       return (
-        <div className="drum-container w-12 h-10 bg-gray-900 border-2 border-gray-600 rounded">
-          <div ref={stripRef} className="drum-strip">
-            {[0,1,2,3,4,5,6,7,8,9].map(n => (
-              <div 
-                key={n}
-                className="h-10 flex items-center justify-center text-2xl font-bold text-green-400 font-mono"
-              >
-                {n}
+        <div className="drum-container w-14 h-12 bg-gray-900 border-2 border-gray-600 rounded">
+          <div 
+            ref={cylinderRef}
+            className="drum-cylinder"
+            style={{ 
+              transform: `rotateX(${digit * -ANGLE_PER_FACE}deg)`,
+            }}
+          >
+            {faces.map(({ digit: d, style }) => (
+              <div key={d} className="drum-face" style={style}>
+                {d}
               </div>
             ))}
           </div>
           <div className="drum-overlay"></div>
+          <div className="drum-highlight"></div>
         </div>
       );
     }
@@ -180,7 +215,7 @@
             <DrumDigit 
               key={i} 
               digit={d} 
-              duration={400}
+              duration={500}
             />
           ))}
         </div>
