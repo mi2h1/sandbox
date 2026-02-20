@@ -1,305 +1,665 @@
 <!DOCTYPE html>
+
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MOTHER2 HP Drum</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>速雀 / SOKU-JONG — 牌プレビュー</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&family=Shippori+Mincho:wght@400;700&display=swap" rel="stylesheet">
   <style>
-    body {
-      background-color: #030712;
-    }
-    .drum-container {
-      perspective: 150px;
-      overflow: hidden;
-      position: relative;
-    }
-    .drum-cylinder {
-      position: absolute;
-      width: 100%;
-      top: 50%;
-      transform-style: preserve-3d;
-    }
-    .drum-face {
-      position: absolute;
-      width: 100%;
-      height: 32px;
-      margin-top: -16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      backface-visibility: hidden;
-      font-family: monospace;
-      font-weight: bold;
-      font-size: 1.4rem;
-      color: #4ade80;
-    }
-    .drum-overlay {
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(to bottom, 
-        rgba(0,0,0,0.85) 0%, 
-        rgba(0,0,0,0.4) 25%,
-        transparent 45%,
-        transparent 55%,
-        rgba(0,0,0,0.4) 75%,
-        rgba(0,0,0,0.85) 100%
-      );
-      pointer-events: none;
-      border-radius: 4px;
-    }
-    .drum-highlight {
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(to right,
-        rgba(255,255,255,0.03) 0%,
-        rgba(255,255,255,0.08) 50%,
-        rgba(255,255,255,0.03) 100%
-      );
-      pointer-events: none;
-      border-radius: 4px;
-    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+```
+:root {
+  --felt: #1a4a28;
+  --felt-dark: #112e1a;
+  --felt-light: #22613a;
+  --ivory: #f5f0e0;
+  --ivory-dark: #e8e0c8;
+  --red-tile: #cc2200;
+  --gold: #c9a84c;
+  --text: #f0e8d0;
+  --text-dim: #8aac96;
+}
+
+body {
+  background-color: var(--felt-dark);
+  color: var(--text);
+  font-family: 'Shippori Mincho', serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Felt texture overlay ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px),
+    repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+header {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 3rem 1rem 1.5rem;
+  border-bottom: 1px solid rgba(201,168,76,0.2);
+}
+
+.title-ja {
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: var(--gold);
+  text-shadow: 0 2px 20px rgba(201,168,76,0.3);
+}
+
+.title-en {
+  font-size: clamp(0.8rem, 2vw, 1rem);
+  letter-spacing: 0.5em;
+  color: var(--text-dim);
+  margin-top: 0.4rem;
+  text-transform: uppercase;
+}
+
+.subtitle {
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  color: var(--text-dim);
+  margin-top: 1.2rem;
+  opacity: 0.7;
+}
+
+/* ── 3D Canvas ── */
+#canvas-wrap {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 480px;
+  cursor: grab;
+}
+
+#canvas-wrap:active { cursor: grabbing; }
+
+canvas { display: block; }
+
+/* ── Controls ── */
+.controls {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1.25rem 1rem;
+  flex-wrap: wrap;
+}
+
+.btn {
+  background: transparent;
+  border: 1px solid rgba(201,168,76,0.4);
+  color: var(--text-dim);
+  font-family: 'Shippori Mincho', serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  padding: 0.4rem 1rem;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn:hover, .btn.active {
+  background: rgba(201,168,76,0.15);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* ── Tile grid (2D reference) ── */
+.section {
+  position: relative;
+  z-index: 1;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+.section-title {
+  font-size: 0.7rem;
+  letter-spacing: 0.4em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(201,168,76,0.15);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.tile-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.tile-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tile-group-label {
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.tile-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.tile-2d {
+  width: 42px;
+  height: 58px;
+  background: var(--ivory);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.8);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  position: relative;
+  color: #1a1a1a;
+}
+
+.tile-2d.red {
+  color: var(--red-tile);
+}
+
+.tile-2d.dora::after {
+  content: '★';
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  font-size: 0.45rem;
+  color: var(--gold);
+  line-height: 1;
+}
+
+.tile-2d:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.8);
+}
+
+/* ── Spec table ── */
+.spec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.spec-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(201,168,76,0.1);
+  border-radius: 4px;
+  padding: 1rem 1.2rem;
+}
+
+.spec-card dt {
+  font-size: 0.6rem;
+  letter-spacing: 0.3em;
+  color: var(--gold);
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+}
+
+.spec-card dd {
+  font-size: 0.9rem;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+footer {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 2rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  color: var(--text-dim);
+  opacity: 0.5;
+  border-top: 1px solid rgba(201,168,76,0.1);
+  margin-top: 2rem;
+}
+
+/* ── Info overlay ── */
+#info {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  color: var(--text-dim);
+  pointer-events: none;
+  white-space: nowrap;
+}
+```
+
   </style>
 </head>
 <body>
-  <div id="root"></div>
 
-  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<header>
+  <div class="title-ja">速雀</div>
+  <div class="title-en">SOKU-JONG</div>
+  <div class="subtitle">牌プレビュー — Tile Preview</div>
+</header>
 
-  <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+<!-- 3D Canvas -->
 
-    const FACE_COUNT = 10;
-    const ANGLE_PER_FACE = 360 / FACE_COUNT;
-    const RADIUS = 32;
+<div id="canvas-wrap">
+  <canvas id="three-canvas"></canvas>
+  <div id="info">ドラッグで回転 / スクロールでズーム</div>
+</div>
 
-    function DrumDigit({ digit, duration = 150 }) {
-      const cylinderRef = useRef(null);
-      const animationRef = useRef(null);
-      const currentAngleRef = useRef(digit * -ANGLE_PER_FACE);
+<div class="controls">
+  <button class="btn active" onclick="showSet('all')">全牌</button>
+  <button class="btn" onclick="showSet('souzu')">索子</button>
+  <button class="btn" onclick="showSet('jihai')">字牌</button>
+  <button class="btn" onclick="showSet('red')">赤牌</button>
+  <button class="btn" onclick="toggleSpin()">自動回転</button>
+</div>
 
-      useEffect(() => {
-        if (animationRef.current) {
-          cancelAnimationFrame(animationRef.current);
-        }
+<!-- 2D tile reference -->
 
-        const startAngle = currentAngleRef.current;
-        // 現在の正規化された角度から目標を計算
-        const normalizedStart = ((startAngle % 360) + 360) % 360;
-        const targetBase = digit * -ANGLE_PER_FACE;
-        const normalizedTarget = ((targetBase % 360) + 360) % 360;
-        
-        // 最短距離を計算
-        let diff = normalizedTarget - normalizedStart;
-        if (diff > 180) diff -= 360;
-        if (diff < -180) diff += 360;
-        
-        const targetAngle = startAngle + diff;
-        
-        if (Math.abs(diff) < 0.1) return;
+<div class="section">
+  <div class="section-title">牌一覧（2D参照）</div>
+  <div class="tile-grid" id="tile-grid-2d"></div>
+</div>
 
-        const startTime = performance.now();
+<!-- Spec -->
 
-        function animate(currentTime) {
-          const elapsed = currentTime - startTime;
-          const progress = Math.min(elapsed / duration, 1);
-          
-          // イーズアウト
-          const eased = 1 - Math.pow(1 - progress, 2);
-          
-          const newAngle = startAngle + diff * eased;
-          currentAngleRef.current = newAngle;
-          
-          if (cylinderRef.current) {
-            cylinderRef.current.style.transform = `rotateX(${newAngle}deg)`;
-          }
+<div class="section">
+  <div class="section-title">ゲーム仕様</div>
+  <dl class="spec-grid">
+    <div class="spec-card"><dt>牌セット</dt><dd>索子1〜9・發・中<br>計44枚</dd></div>
+    <div class="spec-card"><dt>赤牌</dt><dd>索子各1枚（9種）<br>字牌なし</dd></div>
+    <div class="spec-card"><dt>和了条件</dt><dd>2面子完成<br>5点以上縛り</dd></div>
+    <div class="spec-card"><dt>配牌</dt><dd>5枚配牌<br>ツモ1枚→打牌</dd></div>
+    <div class="spec-card"><dt>役満</dt><dd>オールグリーン 10点<br>チンヤオ 15点<br>スーパーレッド 20点</dd></div>
+    <div class="spec-card"><dt>形式</dt><dd>東風戦 / 2〜4人<br>持ち点40</dd></div>
+  </dl>
+</div>
 
-          if (progress < 1) {
-            animationRef.current = requestAnimationFrame(animate);
-          } else {
-            currentAngleRef.current = targetAngle;
-            if (cylinderRef.current) {
-              cylinderRef.current.style.transform = `rotateX(${targetAngle}deg)`;
-            }
-          }
-        }
+<footer>速雀 / SOKU-JONG — Tile Preview — Three.js r152</footer>
 
-        animationRef.current = requestAnimationFrame(animate);
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-        return () => {
-          if (animationRef.current) {
-            cancelAnimationFrame(animationRef.current);
-          }
-        };
-      }, [digit, duration]);
+<script>
+// ── Tile data ──
+const SOUZU = [
+  { kind:'1s', char:'🀐', label:'一索' },
+  { kind:'2s', char:'🀑', label:'二索' },
+  { kind:'3s', char:'🀒', label:'三索' },
+  { kind:'4s', char:'🀓', label:'四索' },
+  { kind:'5s', char:'🀔', label:'五索' },
+  { kind:'6s', char:'🀕', label:'六索' },
+  { kind:'7s', char:'🀖', label:'七索' },
+  { kind:'8s', char:'🀗', label:'八索' },
+  { kind:'9s', char:'🀘', label:'九索' },
+];
+const JIHAI = [
+  { kind:'hatsu', char:'🀅', label:'發' },
+  { kind:'chun',  char:'🀄', label:'中' },
+];
 
-      const faces = Array.from({ length: FACE_COUNT }, (_, i) => {
-        const angle = i * ANGLE_PER_FACE;
-        return {
-          digit: i,
-          style: {
-            transform: `rotateX(${angle}deg) translateZ(${RADIUS}px)`,
-          }
-        };
-      });
+// Build full 44-tile set
+const ALL_TILES = [];
+SOUZU.forEach(t => {
+  for (let i = 0; i < 4; i++) {
+    ALL_TILES.push({ ...t, isRed: i === 0, id: `${t.kind}_${i === 0 ? 'r' : i}` });
+  }
+});
+JIHAI.forEach(t => {
+  for (let i = 0; i < 4; i++) {
+    ALL_TILES.push({ ...t, isRed: false, id: `${t.kind}_${i}` });
+  }
+});
 
-      return (
-        <div className="drum-container w-12 h-16 bg-gray-900 border-2 border-gray-600 rounded">
-          <div 
-            ref={cylinderRef}
-            className="drum-cylinder"
-            style={{ 
-              transform: `rotateX(${digit * -ANGLE_PER_FACE}deg)`,
-            }}
-          >
-            {faces.map(({ digit: d, style }) => (
-              <div key={d} className="drum-face" style={style}>
-                {d}
-              </div>
-            ))}
-          </div>
-          <div className="drum-overlay"></div>
-          <div className="drum-highlight"></div>
-        </div>
-      );
+// ── 2D grid ──
+(function build2DGrid() {
+  const grid = document.getElementById('tile-grid-2d');
+
+  const makeGroup = (tiles, label) => {
+    const group = document.createElement('div');
+    group.className = 'tile-group';
+
+    const rowNormal = document.createElement('div');
+    rowNormal.className = 'tile-row';
+    const rowRed = document.createElement('div');
+    rowRed.className = 'tile-row';
+
+    tiles.forEach(t => {
+      // Normal
+      const el = document.createElement('div');
+      el.className = 'tile-2d';
+      el.textContent = t.char;
+      el.title = t.label;
+      rowNormal.appendChild(el);
+
+      // Red (souzu only)
+      if (t.isRed !== undefined) {
+        // one red copy
+        const rel = document.createElement('div');
+        rel.className = 'tile-2d red';
+        rel.textContent = t.char;
+        rel.title = t.label + '（赤）';
+        rowRed.appendChild(rel);
+      }
+    });
+
+    const lbl = document.createElement('div');
+    lbl.className = 'tile-group-label';
+    lbl.textContent = label;
+
+    group.appendChild(rowNormal);
+    if (rowRed.children.length > 0) group.appendChild(rowRed);
+    group.appendChild(lbl);
+    grid.appendChild(group);
+  };
+
+  // Group souzu by 3
+  const s1 = SOUZU.slice(0, 3).map(t => ({ ...t, isRed: true }));
+  const s2 = SOUZU.slice(3, 6).map(t => ({ ...t, isRed: true }));
+  const s3 = SOUZU.slice(6, 9).map(t => ({ ...t, isRed: true }));
+  makeGroup(s1, '一〜三索');
+  makeGroup(s2, '四〜六索');
+  makeGroup(s3, '七〜九索');
+
+  const sep = document.createElement('div');
+  sep.style.cssText = 'width:1px;background:rgba(201,168,76,0.2);margin:0 0.5rem;';
+  grid.appendChild(sep);
+
+  makeGroup(JIHAI, '字牌');
+})();
+
+// ── Three.js ──
+const wrap = document.getElementById('canvas-wrap');
+const canvas = document.getElementById('three-canvas');
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = null;
+
+const camera = new THREE.PerspectiveCamera(45, wrap.clientWidth / wrap.clientHeight, 0.1, 100);
+camera.position.set(0, 4, 10);
+camera.lookAt(0, 0, 0);
+
+// Lights
+const ambient = new THREE.AmbientLight(0xfff8e7, 0.6);
+scene.add(ambient);
+
+const dirLight = new THREE.DirectionalLight(0xfff8e7, 1.2);
+dirLight.position.set(5, 10, 5);
+dirLight.castShadow = true;
+scene.add(dirLight);
+
+const fillLight = new THREE.DirectionalLight(0xc9e8d0, 0.4);
+fillLight.position.set(-4, 3, -2);
+scene.add(fillLight);
+
+// Tile dimensions
+const TW = 0.26, TH = 0.35, TD = 0.18;
+
+// Canvas texture generator
+function makeTileTexture(char, isRed) {
+  const size = 256;
+  const cv = document.createElement('canvas');
+  cv.width = size; cv.height = Math.round(size * 1.35);
+  const ctx = cv.getContext('2d');
+
+  // Background
+  const grad = ctx.createLinearGradient(0, 0, 0, cv.height);
+  grad.addColorStop(0, '#f8f3e3');
+  grad.addColorStop(1, '#ede4cc');
+  ctx.fillStyle = grad;
+  const r = 18;
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.lineTo(cv.width - r, 0);
+  ctx.quadraticCurveTo(cv.width, 0, cv.width, r);
+  ctx.lineTo(cv.width, cv.height - r);
+  ctx.quadraticCurveTo(cv.width, cv.height, cv.width - r, cv.height);
+  ctx.lineTo(r, cv.height);
+  ctx.quadraticCurveTo(0, cv.height, 0, cv.height - r);
+  ctx.lineTo(0, r);
+  ctx.quadraticCurveTo(0, 0, r, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // Inner border
+  ctx.strokeStyle = 'rgba(180,160,110,0.3)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(r + 6, 6);
+  ctx.lineTo(cv.width - r - 6, 6);
+  ctx.quadraticCurveTo(cv.width - 6, 6, cv.width - 6, r + 6);
+  ctx.lineTo(cv.width - 6, cv.height - r - 6);
+  ctx.quadraticCurveTo(cv.width - 6, cv.height - 6, cv.width - r - 6, cv.height - 6);
+  ctx.lineTo(r + 6, cv.height - 6);
+  ctx.quadraticCurveTo(6, cv.height - 6, 6, cv.height - r - 6);
+  ctx.lineTo(6, r + 6);
+  ctx.quadraticCurveTo(6, 6, r + 6, 6);
+  ctx.closePath();
+  ctx.stroke();
+
+  // Character
+  ctx.fillStyle = isRed ? '#cc2200' : '#1a1008';
+  ctx.font = `${Math.round(size * 0.65)}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(char, cv.width / 2, cv.height / 2 + 4);
+
+  const tex = new THREE.CanvasTexture(cv);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function makeTileMesh(char, isRed) {
+  const frontTex = makeTileTexture(char, isRed);
+
+  // Ivory material for sides/back
+  const ivory = new THREE.MeshPhysicalMaterial({
+    color: 0xf2ead8,
+    roughness: 0.2,
+    metalness: 0.0,
+    clearcoat: 0.8,
+    clearcoatRoughness: 0.15,
+  });
+
+  // Front face
+  const front = new THREE.MeshPhysicalMaterial({
+    map: frontTex,
+    roughness: 0.2,
+    metalness: 0.0,
+    clearcoat: 0.9,
+    clearcoatRoughness: 0.1,
+  });
+
+  // Back face (subtle pattern)
+  const back = new THREE.MeshPhysicalMaterial({
+    color: 0xe8dfc5,
+    roughness: 0.25,
+    metalness: 0.0,
+    clearcoat: 0.7,
+  });
+
+  // BoxGeometry: [right, left, top, bottom, front, back]
+  const materials = [ivory, ivory, ivory, ivory, front, back];
+  const geo = new THREE.BoxGeometry(TW, TH, TD);
+  const mesh = new THREE.Mesh(geo, materials);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+// Arrange tiles in a display
+let tileGroup = new THREE.Group();
+scene.add(tileGroup);
+
+const DISPLAY_TILES = [
+  ...SOUZU.map(t => ({ ...t, isRed: false })),
+  ...JIHAI,
+  ...SOUZU.map(t => ({ ...t, isRed: true })),
+];
+
+function buildTileDisplay(filter) {
+  // Clear old
+  while (tileGroup.children.length) {
+    const m = tileGroup.children[0];
+    tileGroup.remove(m);
+    m.geometry.dispose();
+  }
+
+  let tiles;
+  if (filter === 'souzu') tiles = SOUZU.flatMap(t => [{ ...t, isRed: false }, { ...t, isRed: true }]);
+  else if (filter === 'jihai') tiles = JIHAI;
+  else if (filter === 'red') tiles = SOUZU.map(t => ({ ...t, isRed: true }));
+  else tiles = [
+    ...SOUZU.map(t => ({ ...t, isRed: false })),
+    ...JIHAI,
+    ...SOUZU.map(t => ({ ...t, isRed: true })),
+  ];
+
+  const cols = Math.ceil(Math.sqrt(tiles.length * 1.5));
+  const spacingX = TW + 0.06;
+  const spacingZ = TH + 0.06;
+  const rows = Math.ceil(tiles.length / cols);
+  const offsetX = -(cols - 1) / 2 * spacingX;
+  const offsetZ = -(rows - 1) / 2 * spacingZ;
+
+  tiles.forEach((t, i) => {
+    const mesh = makeTileMesh(t.char, t.isRed);
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    mesh.position.set(
+      offsetX + col * spacingX,
+      0,
+      offsetZ + row * spacingZ
+    );
+    // Lay flat on table
+    mesh.rotation.x = -Math.PI / 2;
+    tileGroup.add(mesh);
+  });
+}
+
+buildTileDisplay('all');
+
+// Hover effect
+let hoveredMesh = null;
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+wrap.addEventListener('mousemove', e => {
+  const rect = wrap.getBoundingClientRect();
+  mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(tileGroup.children);
+
+  if (hoveredMesh && (!hits.length || hits[0].object.parent !== hoveredMesh)) {
+    hoveredMesh.position.y = 0;
+    hoveredMesh = null;
+  }
+  if (hits.length) {
+    const m = hits[0].object.parent || hits[0].object;
+    if (m !== hoveredMesh && tileGroup.children.includes(m)) {
+      hoveredMesh = m;
+      hoveredMesh.position.y = 0.12;
     }
+  }
+});
 
-    function DrumCounter({ value, digits = 4, tickInterval = 50 }) {
-      const [displayValue, setDisplayValue] = useState(value);
-      const targetRef = useRef(value);
-      const intervalRef = useRef(null);
+// Orbit (simple)
+let isDragging = false, prevX = 0, prevY = 0;
+let rotX = 0.5, rotY = 0;
+let zoom = 10;
 
-      useEffect(() => {
-        targetRef.current = value;
-        
-        if (intervalRef.current) {
-          return; // すでにアニメーション中なら継続
-        }
+wrap.addEventListener('mousedown', e => { isDragging = true; prevX = e.clientX; prevY = e.clientY; });
+window.addEventListener('mouseup', () => isDragging = false);
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  rotY += (e.clientX - prevX) * 0.01;
+  rotX += (e.clientY - prevY) * 0.005;
+  rotX = Math.max(0.1, Math.min(1.2, rotX));
+  prevX = e.clientX; prevY = e.clientY;
+  autoSpin = false;
+  document.querySelector('.btn[onclick="toggleSpin()"]').classList.remove('active');
+});
+wrap.addEventListener('wheel', e => {
+  zoom = Math.max(4, Math.min(18, zoom + e.deltaY * 0.01));
+});
 
-        const tick = () => {
-          setDisplayValue(prev => {
-            const target = targetRef.current;
-            if (prev === target) {
-              clearInterval(intervalRef.current);
-              intervalRef.current = null;
-              return prev;
-            }
-            // 1ずつ増減
-            return prev < target ? prev + 1 : prev - 1;
-          });
-        };
+// Auto spin
+let autoSpin = true;
+let spinTime = 0;
 
-        if (displayValue !== value) {
-          intervalRef.current = setInterval(tick, tickInterval);
-        }
+function toggleSpin() {
+  autoSpin = !autoSpin;
+  document.querySelector('.btn[onclick="toggleSpin()"]').classList.toggle('active', autoSpin);
+}
 
-        return () => {
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-          }
-        };
-      }, [value, tickInterval]);
+// Filter buttons
+let activeFilter = 'all';
+function showSet(filter) {
+  activeFilter = filter;
+  document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  buildTileDisplay(filter);
+}
 
-      // 途中で目標値が変わった場合に対応
-      useEffect(() => {
-        targetRef.current = value;
-        
-        if (!intervalRef.current && displayValue !== value) {
-          const tick = () => {
-            setDisplayValue(prev => {
-              const target = targetRef.current;
-              if (prev === target) {
-                clearInterval(intervalRef.current);
-                intervalRef.current = null;
-                return prev;
-              }
-              return prev < target ? prev + 1 : prev - 1;
-            });
-          };
-          intervalRef.current = setInterval(tick, tickInterval);
-        }
-      }, [value]);
+// Animation loop
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
 
-      const paddedValue = String(Math.max(0, displayValue)).padStart(digits, '0');
-      const digitArray = paddedValue.split('').map(Number);
+  if (autoSpin) {
+    spinTime += delta;
+    rotY = spinTime * 0.3;
+  }
 
-      return (
-        <div className="flex gap-1 p-3 bg-gray-800 rounded-lg shadow-inner">
-          {digitArray.map((d, i) => (
-            <DrumDigit 
-              key={i} 
-              digit={d} 
-              duration={120}
-            />
-          ))}
-        </div>
-      );
-    }
+  camera.position.x = Math.sin(rotY) * Math.sin(rotX) * zoom;
+  camera.position.y = Math.cos(rotX) * zoom;
+  camera.position.z = Math.cos(rotY) * Math.sin(rotX) * zoom;
+  camera.lookAt(0, 0, 0);
 
-    function App() {
-      const [hp, setHp] = useState(999);
-      const maxHp = 999;
+  renderer.render(scene, camera);
+}
+animate();
 
-      const takeDamage = (amount) => setHp(prev => Math.max(0, prev - amount));
-      const heal = (amount) => setHp(prev => Math.min(maxHp, prev + amount));
+// Resize
+window.addEventListener('resize', () => {
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+});
+</script>
 
-      return (
-        <div className="min-h-screen flex flex-col items-center justify-center gap-8 p-8">
-          <h1 className="text-3xl font-bold text-yellow-400 tracking-wider">
-            MOTHER2 HP DRUM
-          </h1>
-
-          <div className="flex flex-col items-center gap-4">
-            <div className="text-gray-400 text-sm tracking-widest">HP</div>
-            <DrumCounter value={hp} digits={4} tickInterval={40} />
-            <div className="text-gray-500 text-xs">/ {maxHp}</div>
-          </div>
-
-          <div className="flex flex-wrap gap-3 justify-center">
-            <button
-              onClick={() => takeDamage(50)}
-              className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded font-bold transition-colors"
-            >
-              -50 ダメージ
-            </button>
-            <button
-              onClick={() => takeDamage(150)}
-              className="px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded font-bold transition-colors"
-            >
-              -150 大ダメージ
-            </button>
-            <button
-              onClick={() => takeDamage(500)}
-              className="px-4 py-2 bg-red-900 hover:bg-red-800 text-white rounded font-bold transition-colors"
-            >
-              -500 致命傷！
-            </button>
-            <button
-              onClick={() => heal(100)}
-              className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded font-bold transition-colors"
-            >
-              +100 回復
-            </button>
-            <button
-              onClick={() => setHp(maxHp)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold transition-colors"
-            >
-              全回復
-            </button>
-          </div>
-
-          <p className="text-gray-500 text-sm max-w-md text-center">
-            致命傷を受けても、HPが0になる前に回復ボタンを押せば助かる...かも？
-          </p>
-        </div>
-      );
-    }
-
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
-  </script>
 </body>
 </html>
